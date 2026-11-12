@@ -35,8 +35,9 @@ neoForge {
     runs {
         client {
             client()
-            gameDirectory = project.file('run/client')
+            gameDirectory = project.file(providers.gradleProperty('clientRunDir').getOrElse('run/client'))
             programArguments.addAll '--width', '1280', '--height', '800'
+            systemProperty 'copypoly.clientSmoke', providers.gradleProperty('clientSmoke').getOrElse('false')
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
@@ -76,17 +77,15 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 configurations { createBundle }
-// Compile against the exact Registrate nested in Create, without bundling a second runtime copy.
+// Compile against Create's bundled libraries, matching the selected Create version.
 def extractCreateLibraries = tasks.register('extractCreateLibraries', Sync) {
     from(configurations.createBundle.elements.map { elements -> elements.collect { zipTree(it.asFile) } })
-    include 'META-INF/jarjar/Registrate-*.jar'
+    include 'META-INF/jarjar/*.jar'
     into layout.buildDirectory.dir('createLibraries')
 }
 dependencies {
-    createBundle('maven.modrinth:create:6.0.10+mc1.21.1') { transitive = false }
-    implementation('maven.modrinth:create:6.0.10+mc1.21.1') { transitive = false }
-    compileOnly 'net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1'
-    compileOnly 'dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6'
+    createBundle("maven.modrinth:create:${create_version}") { transitive = false }
+    implementation("maven.modrinth:create:${create_version}") { transitive = false }
     compileOnly files(fileTree(layout.buildDirectory.dir('createLibraries')) { include '**/*.jar' }).builtBy(extractCreateLibraries)
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -98,6 +97,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
                              neo_version            : neo_version,
                              neo_version_range      : neo_version_range,
                              loader_version_range   : loader_version_range,
+                             create_version_range   : create_version_range,
                              mod_id                 : mod_id,
                              mod_name               : mod_name,
                              mod_license            : mod_license,
