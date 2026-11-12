@@ -3,7 +3,10 @@ package com.caca.copypoly;
 import com.simibubi.create.AllItems;
 import com.simibubi.create.content.decoration.copycat.*;
 import net.minecraft.core.*;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.LivingEntity;
@@ -63,6 +66,26 @@ public class PolyBlock extends CopycatBlock {
     @Override protected VoxelShape getCollisionShape(BlockState s, BlockGetter w, BlockPos p, CollisionContext c) { return getShape(s,w,p,c); }
     @Override protected VoxelShape getOcclusionShape(BlockState s, BlockGetter w, BlockPos p) { return Shapes.empty(); }
     @Override protected boolean isPathfindable(BlockState state, PathComputationType type) { return false; }
+    @Override public boolean addLandingEffects(BlockState state, ServerLevel level, BlockPos pos, BlockState landedState,
+                                               LivingEntity entity, int numberOfParticles) {
+        if (!(level.getBlockEntity(pos) instanceof PolyBlockEntity be) || !be.hasCustomMaterial()) return false;
+        BlockState material = be.getMaterial();
+        if (material.addLandingEffects(level, pos, material, entity, numberOfParticles)) return true;
+
+        // Match vanilla's edge-landing adjustment and use the entity's actual landing height.
+        double x = entity.getX(), z = entity.getZ();
+        BlockPos entityPos = entity.blockPosition();
+        if (pos.getX() != entityPos.getX() || pos.getZ() != entityPos.getZ()) {
+            double dx = x - pos.getX() - 0.5, dz = z - pos.getZ() - 0.5;
+            double extent = Math.max(Math.abs(dx), Math.abs(dz));
+            x = pos.getX() + 0.5 + dx / extent * 0.5;
+            z = pos.getZ() + 0.5 + dz / extent * 0.5;
+        }
+        // Send the material state itself: particle packets do not carry the copycat's model data.
+        level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, material).setPos(pos),
+            x, entity.getY(), z, numberOfParticles, 0.0, 0.0, 0.0, 0.15F);
+        return true;
+    }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!player.isShiftKeyDown()) return InteractionResult.PASS;
         openEditor(level, pos, player);
