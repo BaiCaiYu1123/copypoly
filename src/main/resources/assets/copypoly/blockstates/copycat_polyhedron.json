@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "copypoly:block/copycat_polyhedron"
+    }
+  }
+}

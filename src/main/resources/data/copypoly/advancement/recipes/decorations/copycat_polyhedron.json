@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_zinc": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": "#c:ingots/zinc"
+          }
+        ]
+      }
+    },
+    "has_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "copypoly:copycat_polyhedron"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_zinc",
+      "has_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "copypoly:copycat_polyhedron"
+    ]
+  }
+}
