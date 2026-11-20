@@ -5,6 +5,8 @@ import com.caca.copypoly.geometry.Polyhedron;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.decoration.copycat.CopycatModel;
+import com.simibubi.create.content.decoration.copycat.FilteredBlockAndTintGetter;
+import com.simibubi.create.foundation.block.connected.CTModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.*;
@@ -51,12 +53,41 @@ public class PolyModel extends BakedModelWrapper<BakedModel> {
             default -> p.z()>0?Direction.SOUTH:Direction.NORTH;
         };
     }
+    private static final Map<Class<?>,Boolean> CONNECTS = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Whether this material model reacts to its neighbours on its own: Create's {@code CTModel} (connected
+     * glass, casings, pillars) plus the third-party connected-texture wrappers resource packs stack on top
+     * (Fusion's {@code ConnectingBakedModel}, Continuity's {@code CtmBakedModel}). Anything else ignores the
+     * world, so there is nothing to gain from showing it its neighbours.
+     */
+    private static boolean connects(BakedModel model) {
+        return CONNECTS.computeIfAbsent(model.getClass(),type -> {
+            if(model instanceof CTModel) return true;
+            String name=type.getName();
+            return name.endsWith("CTModel") || name.contains("CtmBakedModel") || name.contains("ConnectingBakedModel");
+        });
+    }
     @Override public ModelData getModelData(BlockAndTintGetter world,BlockPos pos,BlockState state,ModelData data) {
         BlockState material=CopycatModel.getMaterial(data);
         Polyhedron poly=data.get(PolyBlockEntity.GEOMETRY);
         if(poly==null) poly=Polyhedron.CUBE;
         BakedModel source=Minecraft.getInstance().getBlockRenderer().getBlockModel(material);
-        ModelData sourceData=source.getModelData(world,pos,material,ModelData.EMPTY);
+        // Two routes in one:
+        //  * material model connects -> hand it a view that only exposes the sides this hull shows a face
+        //    towards, so the connected tile it picks matches the geometry; projectFace resamples that
+        //    connected tile by position afterwards.
+        //  * material model is plain -> seal the view to this block: no neighbour queries, guaranteed plain
+        //    tiles, continuity carried purely by position.
+        ModelData sourceData;
+        if(connects(source)) {
+            BlockState self=state;
+            FilteredBlockAndTintGetter view=new FilteredBlockAndTintGetter(world,
+                p -> p.equals(pos) || (self.getBlock() instanceof PolyBlock block && block.canConnectTexturesToward(world,pos,p,self)));
+            sourceData=source.getModelData(view,pos,material,ModelData.EMPTY);
+        } else {
+            FilteredBlockAndTintGetter sealed=new FilteredBlockAndTintGetter(world,pos::equals);
+            sourceData=source.getModelData(sealed,pos,material,ModelData.EMPTY);
+        }
         return data.derive().with(MESH,mesh(poly,material,source,sourceData,material.getSeed(pos))).build();
     }
     private Mesh mesh(Polyhedron poly,BlockState material,BakedModel source,ModelData data,long seed) {

@@ -225,6 +225,32 @@ public final class Polyhedron {
         int x=Math.abs(p.x),y=Math.abs(p.y),z=Math.abs(p.z);
         return y>=x && y>=z ? 1 : x>=z ? 0 : 2;
     }
+    /**
+     * True when the hull owns a face parallel to {@code axis}/{@code positive} whose vertices all sit on
+     * that side of the block (coordinate 16 or 0). Connected-texture code uses this to decide whether the
+     * copied material is actually presented on that side: only then may this block claim the material as
+     * its appearance, and only then should neighbours behind that side count. Slanted faces never qualify,
+     * even where they touch the border along an edge, and neither do inset faces parallel to the side.
+     */
+    public boolean faceAtBoundary(int axis,boolean positive) {
+        double target=positive ? 16 : 0;
+        for(Face face:faces) {
+            Plane normal=face.plane();
+            int others=axis==0 ? Math.abs(normal.y())+Math.abs(normal.z())
+                : axis==1 ? Math.abs(normal.x())+Math.abs(normal.z())
+                : Math.abs(normal.x())+Math.abs(normal.y());
+            if(others!=0) continue; // not parallel to that block side
+            int facing=axis==0 ? normal.x() : axis==1 ? normal.y() : normal.z();
+            if((facing>0)!=positive) continue;
+            if(face.vertices().isEmpty()) continue;
+            boolean onBorder=true;
+            for(Point vertex:face.vertices()) {
+                if(Math.abs(vertex.axis(axis)-target)>1e-6) {onBorder=false;break;}
+            }
+            if(onBorder) return true;
+        }
+        return false;
+    }
     private static int u(Point p,int axis) { return axis==0 ? p.tz() : p.tx(); }
     private static int v(Point p,int axis) { return axis==1 ? p.tz() : p.ty(); }
     private static long cross(Point a,Point b,Point c,int axis) {
