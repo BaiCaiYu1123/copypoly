@@ -99,6 +99,29 @@ class PolyhedronTest {
         var p=new Polyhedron.Point(1.1,2.2,3.3).withAxis(1,4.4);
         assertEquals(new Polyhedron.Point(1.1,4.4,3.3),p);
     }
+    @Test void showsOffsetAllowsCornersOnlyWhereTheHullFillsTheBorder() {
+        // A full cube lets connected textures see every neighbour and every corner probe.
+        assertTrue(Polyhedron.CUBE.showsOffset(0,0,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(1,0,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(0,1,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(1,0,-1));   // corner of the top/bottom face
+        assertTrue(Polyhedron.CUBE.showsOffset(1,1,1));
+        assertTrue(Polyhedron.CUBE.showsOffset(2,0,0));    // front-of-face / inner seam lookups
+        assertFalse(Polyhedron.CUBE.showsOffset(3,0,0));
+        // Half block spanning x 0..8: +X is not a block border, so nothing past it may connect, corner or not.
+        var half=hull("0,0,0;0,0,16;0,16,0;0,16,16;8,0,0;8,0,16;8,16,0;8,16,16");
+        assertTrue(half.showsOffset(-1,0,0));
+        assertFalse(half.showsOffset(1,0,0));
+        assertFalse(half.showsOffset(1,0,1));
+        assertTrue(half.showsOffset(-1,0,1));
+        assertTrue(half.showsOffset(0,1,0));
+        // Tetrahedron: only the three coordinate-negative sides sit on the border.
+        var tetra=hull("0,0,0;16,0,0;0,16,0;0,0,16");
+        assertTrue(tetra.showsOffset(0,-1,0));
+        assertFalse(tetra.showsOffset(0,1,0));
+        assertTrue(tetra.showsOffset(-1,-1,0));
+        assertFalse(tetra.showsOffset(1,-1,0));
+    }
     @Test void faceAtBoundaryOnlyReportsSidesTheHullPresents() {
         for(int axis=0;axis<3;axis++) {
             assertTrue(Polyhedron.CUBE.faceAtBoundary(axis,true));
