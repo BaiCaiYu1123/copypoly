@@ -99,7 +99,7 @@ class PolyhedronTest {
         var p=new Polyhedron.Point(1.1,2.2,3.3).withAxis(1,4.4);
         assertEquals(new Polyhedron.Point(1.1,4.4,3.3),p);
     }
-    @Test void presentsAcceptsSlantedSurfacesThatStillReachTheBorder() {
+    @Test void presentsReportsWhereTheMaterialIsVisible() {
         for(int axis=0;axis<3;axis++) {
             assertTrue(Polyhedron.CUBE.presents(axis,true));
             assertTrue(Polyhedron.CUBE.presents(axis,false));
@@ -111,16 +111,21 @@ class PolyhedronTest {
         assertFalse(prism.faceAtBoundary(1,true));
         assertTrue(prism.presents(1,false));   // flat bottom on y = 0
         assertTrue(prism.presents(0,false));   // vertical leg on x = 0
-        // No face is parallel to +X, but the slanted face does reach x = 16 along the bottom edge, so the
-        // material is visible from +X. The strict probe gate is what keeps that from inventing a connection
-        // across X: faceAtBoundary(0,true) stays false, so showsOffset hides the +X neighbour.
-        assertTrue(prism.presents(0,true));
+        assertTrue(prism.presents(0,true));    // slanted face looks toward +X as well
         assertFalse(prism.faceAtBoundary(0,true));
         assertFalse(prism.showsOffset(1,0,0));
-        // A hull that stops short of the border presents nothing on that side.
+        // A four-pixel slab: its top is at y = 4, nowhere near the block border, yet that is exactly the
+        // surface you see from above. This is the case Create's own copycat step covers with its y = 8 top.
+        var slab=hull("0,0,0;0,0,16;0,4,0;0,4,16;16,0,0;16,0,16;16,4,0;16,4,16");
+        assertTrue(slab.presents(1,true));
+        assertFalse(slab.faceAtBoundary(1,true));
+        assertTrue(slab.presents(1,false));
+        // An inset hull keeps its appearance everywhere it has a surface, so two inset pieces still join;
+        // the strict probe gate is what stops a connection across a gap the hull does not fill.
         var inset=hull("0,0,0;0,0,16;0,16,0;0,16,16;12,0,0;12,0,16;12,16,0;12,16,16");
-        assertFalse(inset.presents(0,true));
-        assertTrue(inset.presents(0,false));
+        assertTrue(inset.presents(0,true));
+        assertFalse(inset.faceAtBoundary(0,true));
+        assertFalse(inset.showsOffset(1,0,0));
     }
     @Test void showsOffsetAllowsCornersOnlyWhereTheHullFillsTheBorder() {
         // A full cube lets connected textures see every neighbour and every corner probe.
