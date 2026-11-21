@@ -225,6 +225,70 @@ public final class Polyhedron {
         int x=Math.abs(p.x),y=Math.abs(p.y),z=Math.abs(p.z);
         return y>=x && y>=z ? 1 : x>=z ? 0 : 2;
     }
+    /**
+     * True when the hull owns a face parallel to {@code axis}/{@code positive} whose vertices all sit on
+     * that side of the block (coordinate 16 or 0). Connected-texture code uses this to decide whether the
+     * copied material is actually presented on that side: only then may this block claim the material as
+     * its appearance, and only then should neighbours behind that side count. Slanted faces never qualify,
+     * even where they touch the border along an edge, and neither do inset faces parallel to the side.
+     */
+    public boolean faceAtBoundary(int axis,boolean positive) {
+        double target=positive ? 16 : 0;
+        for(Face face:faces) {
+            Plane normal=face.plane();
+            int others=axis==0 ? Math.abs(normal.y())+Math.abs(normal.z())
+                : axis==1 ? Math.abs(normal.x())+Math.abs(normal.z())
+                : Math.abs(normal.x())+Math.abs(normal.y());
+            if(others!=0) continue; // not parallel to that block side
+            int facing=axis==0 ? normal.x() : axis==1 ? normal.y() : normal.z();
+            if((facing>0)!=positive) continue;
+            if(face.vertices().isEmpty()) continue;
+            boolean onBorder=true;
+            for(Point vertex:face.vertices()) {
+                if(Math.abs(vertex.axis(axis)-target)>1e-6) {onBorder=false;break;}
+            }
+            if(onBorder) return true;
+        }
+        return false;
+    }
+    /**
+     * Whether the copied material is visible from this side, i.e. the hull owns some surface whose normal
+     * points that way. This is the appearance test: Create's own copycat parts work the same way, a copycat
+     * step claims its material on top even though its top sits at y = 8, not on the block border. Requiring
+     * the surface to reach the border (as this method did at first) breaks every edited shape that is not
+     * full height: a four-pixel slab would keep refusing to answer, and two adjacent slabs of the same
+     * material would each keep their own frame instead of joining.
+     * <p>
+     * {@link #faceAtBoundary} / {@link #showsOffset} stay strict and are what keeps this from inventing
+     * connections: the appearance may be claimed, but a probe across a side the hull does not fill in still
+     * reads as air.
+     */
+    public boolean presents(int axis,boolean positive) {
+        for(Face face:faces) {
+            if(face.vertices().isEmpty()) continue;
+            Plane normal=face.plane();
+            int component=axis==0 ? normal.x() : axis==1 ? normal.y() : normal.z();
+            if(positive ? component>0 : component<0) return true;
+        }
+        return false;
+    }
+    /**
+     * Whether a connected-texture probe at this block offset should see the real world. Every axis the
+     * offset moves along must be a side where the hull presents a boundary face, so a probe towards a side
+     * the hull does not fill reads as air (no connection invented). Corners matter here: Create's
+     * {@code buildContext} probes corner bits at {@code pos.relative(horizontal, +-1).relative(vertical, +-1)},
+     * i.e. two axes at once, and Fusion/Continuity look up to two blocks out for their front-of-face and
+     * inner-seam tests. Rejecting anything but single-axis offsets leaves every corner bit permanently
+     * false, which shows up as "edges connect, corners do not".
+     */
+    public boolean showsOffset(int dx,int dy,int dz) {
+        if(dx==0 && dy==0 && dz==0) return true; // the block itself stays visible to the query
+        if(Math.abs(dx)>2 || Math.abs(dy)>2 || Math.abs(dz)>2) return false;
+        if(dx!=0 && !faceAtBoundary(0,dx>0)) return false;
+        if(dy!=0 && !faceAtBoundary(1,dy>0)) return false;
+        if(dz!=0 && !faceAtBoundary(2,dz>0)) return false;
+        return true;
+    }
     private static int u(Point p,int axis) { return axis==0 ? p.tz() : p.tx(); }
     private static int v(Point p,int axis) { return axis==1 ? p.tz() : p.ty(); }
     private static long cross(Point a,Point b,Point c,int axis) {

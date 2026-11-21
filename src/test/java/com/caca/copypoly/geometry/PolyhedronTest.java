@@ -99,6 +99,77 @@ class PolyhedronTest {
         var p=new Polyhedron.Point(1.1,2.2,3.3).withAxis(1,4.4);
         assertEquals(new Polyhedron.Point(1.1,4.4,3.3),p);
     }
+    @Test void presentsReportsWhereTheMaterialIsVisible() {
+        for(int axis=0;axis<3;axis++) {
+            assertTrue(Polyhedron.CUBE.presents(axis,true));
+            assertTrue(Polyhedron.CUBE.presents(axis,false));
+        }
+        // Triangular prism (triangle 0,0 / 16,0 / 0,16 extruded along Z): the top surface is the slanted
+        // plane x+y=16, so it is NOT a boundary face, yet the material is clearly visible from above.
+        var prism=hull("0,0,0;16,0,0;0,16,0;0,0,16;16,0,16;0,16,16");
+        assertTrue(prism.presents(1,true));
+        assertFalse(prism.faceAtBoundary(1,true));
+        assertTrue(prism.presents(1,false));   // flat bottom on y = 0
+        assertTrue(prism.presents(0,false));   // vertical leg on x = 0
+        assertTrue(prism.presents(0,true));    // slanted face looks toward +X as well
+        assertFalse(prism.faceAtBoundary(0,true));
+        assertFalse(prism.showsOffset(1,0,0));
+        // A four-pixel slab: its top is at y = 4, nowhere near the block border, yet that is exactly the
+        // surface you see from above. This is the case Create's own copycat step covers with its y = 8 top.
+        var slab=hull("0,0,0;0,0,16;0,4,0;0,4,16;16,0,0;16,0,16;16,4,0;16,4,16");
+        assertTrue(slab.presents(1,true));
+        assertFalse(slab.faceAtBoundary(1,true));
+        assertTrue(slab.presents(1,false));
+        // An inset hull keeps its appearance everywhere it has a surface, so two inset pieces still join;
+        // the strict probe gate is what stops a connection across a gap the hull does not fill.
+        var inset=hull("0,0,0;0,0,16;0,16,0;0,16,16;12,0,0;12,0,16;12,16,0;12,16,16");
+        assertTrue(inset.presents(0,true));
+        assertFalse(inset.faceAtBoundary(0,true));
+        assertFalse(inset.showsOffset(1,0,0));
+    }
+    @Test void showsOffsetAllowsCornersOnlyWhereTheHullFillsTheBorder() {
+        // A full cube lets connected textures see every neighbour and every corner probe.
+        assertTrue(Polyhedron.CUBE.showsOffset(0,0,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(1,0,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(0,1,0));
+        assertTrue(Polyhedron.CUBE.showsOffset(1,0,-1));   // corner of the top/bottom face
+        assertTrue(Polyhedron.CUBE.showsOffset(1,1,1));
+        assertTrue(Polyhedron.CUBE.showsOffset(2,0,0));    // front-of-face / inner seam lookups
+        assertFalse(Polyhedron.CUBE.showsOffset(3,0,0));
+        // Half block spanning x 0..8: +X is not a block border, so nothing past it may connect, corner or not.
+        var half=hull("0,0,0;0,0,16;0,16,0;0,16,16;8,0,0;8,0,16;8,16,0;8,16,16");
+        assertTrue(half.showsOffset(-1,0,0));
+        assertFalse(half.showsOffset(1,0,0));
+        assertFalse(half.showsOffset(1,0,1));
+        assertTrue(half.showsOffset(-1,0,1));
+        assertTrue(half.showsOffset(0,1,0));
+        // Tetrahedron: only the three coordinate-negative sides sit on the border.
+        var tetra=hull("0,0,0;16,0,0;0,16,0;0,0,16");
+        assertTrue(tetra.showsOffset(0,-1,0));
+        assertFalse(tetra.showsOffset(0,1,0));
+        assertTrue(tetra.showsOffset(-1,-1,0));
+        assertFalse(tetra.showsOffset(1,-1,0));
+    }
+    @Test void faceAtBoundaryOnlyReportsSidesTheHullPresents() {
+        for(int axis=0;axis<3;axis++) {
+            assertTrue(Polyhedron.CUBE.faceAtBoundary(axis,true));
+            assertTrue(Polyhedron.CUBE.faceAtBoundary(axis,false));
+        }
+        // Half block spanning x 0..8: only the -X side sits on the block border.
+        var half=hull("0,0,0;0,0,16;0,16,0;0,16,16;8,0,0;8,0,16;8,16,0;8,16,16");
+        assertTrue(half.faceAtBoundary(0,false));
+        assertFalse(half.faceAtBoundary(0,true));
+        assertTrue(half.faceAtBoundary(1,true));
+        assertTrue(half.faceAtBoundary(2,false));
+        // Slanted faces never qualify, even where they touch the border along an edge.
+        var tetra=hull("0,0,0;16,0,0;0,16,0;0,0,16");
+        assertTrue(tetra.faceAtBoundary(0,false));
+        assertTrue(tetra.faceAtBoundary(1,false));
+        assertTrue(tetra.faceAtBoundary(2,false));
+        assertFalse(tetra.faceAtBoundary(0,true));
+        assertFalse(tetra.faceAtBoundary(1,true));
+        assertFalse(tetra.faceAtBoundary(2,true));
+    }
     private static void verifyCoverage(Polyhedron h,Random r) {
         // Positive convex combinations are known interior points, independent of the plane implementation.
         for(int j=0;j<60;j++) {

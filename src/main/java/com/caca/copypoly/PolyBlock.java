@@ -22,6 +22,7 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.*;
 import net.neoforged.neoforge.common.Tags;
+import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 public class PolyBlock extends CopycatBlock {
@@ -58,8 +59,32 @@ public class PolyBlock extends CopycatBlock {
         return InteractionResult.SUCCESS;
     }
     @Override public BlockEntityType<? extends CopycatBlockEntity> getBlockEntityType() { return Copypoly.ENTITY.get(); }
-    @Override public boolean canConnectTexturesToward(BlockAndTintGetter world, BlockPos from, BlockPos to, BlockState state) { return false; }
-    @Override public boolean isIgnoredConnectivitySide(BlockAndTintGetter w, BlockState s, Direction d, BlockPos a, BlockPos b) { return true; }
+    /** Axis index used by {@link com.caca.copypoly.geometry.Polyhedron} (0=x, 1=y, 2=z). */
+    private static int axis(Direction direction) { return direction.getAxis().ordinal(); }
+    /**
+     * The material model's connected-texture pass asks this for every position it wants to look at.
+     * Only sides where the hull actually shows a face on the block border count, so a partial hull does
+     * not pick up connections it has no geometry for. Diagonal offsets are allowed on purpose: corner
+     * tiles are probed at {@code pos.relative(a).relative(b)} and would otherwise always read as air.
+     */
+    @Override public boolean canConnectTexturesToward(BlockAndTintGetter world, BlockPos from, BlockPos to, BlockState state) {
+        int dx = to.getX() - from.getX(), dy = to.getY() - from.getY(), dz = to.getZ() - from.getZ();
+        return world.getBlockEntity(from) instanceof PolyBlockEntity be && be.poly().showsOffset(dx, dy, dz);
+    }
+    /**
+     * Drives {@link CopycatBlock#getAppearance}: returning {@code false} makes this block report the
+     * copied material instead of itself, which is what lets other connected-texture blocks join up to it.
+     * The gate is {@code presents}, not {@code faceAtBoundary}: an edited hull (triangular prism, ramp,
+     * clipped corner) shows the material from above through a slanted face, so requiring a face parallel
+     * to the block side would make two neighbouring polyhedra of the same material stop seeing each other,
+     * which reads in game as "each block keeps its own frame on the shared face".
+     */
+    @Override public boolean isIgnoredConnectivitySide(BlockAndTintGetter world, BlockState state, Direction side, BlockPos from, @Nullable BlockPos to) {
+        if (to == null) return true;
+        if (!(world.getBlockEntity(from) instanceof PolyBlockEntity be)) return true;
+        if (!be.poly().presents(axis(side), side.getAxisDirection() == Direction.AxisDirection.POSITIVE)) return true;
+        return world.getBlockState(to).isAir();
+    }
     @Override protected VoxelShape getShape(BlockState s, BlockGetter w, BlockPos p, CollisionContext c) {
         return w.getBlockEntity(p) instanceof PolyBlockEntity be ? be.outline() : Shapes.block();
     }
