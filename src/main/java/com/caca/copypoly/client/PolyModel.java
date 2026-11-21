@@ -15,6 +15,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.*;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.BlockAndTintGetter;
@@ -67,11 +68,35 @@ public class PolyModel extends BakedModelWrapper<BakedModel> {
             return name.endsWith("CTModel") || name.contains("CtmBakedModel") || name.contains("ConnectingBakedModel");
         });
     }
+    private static final boolean CT_DEBUG = Boolean.getBoolean("copypoly.ctdebug");
+    private static final org.slf4j.Logger CT_LOG = org.slf4j.LoggerFactory.getLogger("copypoly-ct");
+    /**
+     * Debug switch for connected-texture reports: {@code -Dcopypoly.ctdebug=true}. Logs, per polyhedron
+     * position, which material model was used, whether it was classified as a connecting model, and what each
+     * of the six sides answers for the appearance probe - that is the pair of facts needed to tell "the
+     * neighbour does not report the material" (logic) from "the neighbour was never rebuilt" (stale render).
+     */
+    private static void logDecision(BlockAndTintGetter world,BlockPos pos,BlockState material,Polyhedron poly,BakedModel source) {
+        StringBuilder line=new StringBuilder("[copypoly-ct] ").append(pos.toShortString())
+            .append(" material=").append(BuiltInRegistries.BLOCK.getKey(material.getBlock()))
+            .append(" model=").append(source.getClass().getName())
+            .append(" connects=").append(connects(source))
+            .append(" hull=").append(poly.faces().size()).append("f");
+        for(Direction side:Direction.values()) {
+            boolean presents=poly.presents(side.getAxis().ordinal(),side.getAxisDirection()==Direction.AxisDirection.POSITIVE);
+            BlockPos neighbour=pos.relative(side);
+            BlockState appearance=world.getBlockState(neighbour).getAppearance(world,neighbour,side,material,pos);
+            line.append(' ').append(side.getName()).append('=').append(presents?"P":"-")
+                .append('/').append(BuiltInRegistries.BLOCK.getKey(appearance.getBlock()));
+        }
+        CT_LOG.info(line.toString());
+    }
     @Override public ModelData getModelData(BlockAndTintGetter world,BlockPos pos,BlockState state,ModelData data) {
         BlockState material=CopycatModel.getMaterial(data);
         Polyhedron poly=data.get(PolyBlockEntity.GEOMETRY);
         if(poly==null) poly=Polyhedron.CUBE;
         BakedModel source=Minecraft.getInstance().getBlockRenderer().getBlockModel(material);
+        if(CT_DEBUG) logDecision(world,pos,material,poly,source);
         // Two routes in one:
         //  * material model connects -> hand it a view that only exposes the sides this hull shows a face
         //    towards, so the connected tile it picks matches the geometry; projectFace resamples that

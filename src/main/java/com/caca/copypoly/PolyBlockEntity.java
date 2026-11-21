@@ -49,7 +49,16 @@ public class PolyBlockEntity extends CopycatBlockEntity {
             notifyUpdate();
             level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
             PhysicsCompat.shapeChanged(level, worldPosition);
+            refreshClientNeighbourhood();
         }
+    }
+    /**
+     * Neighbours pick their connected tiles from this block's appearance, so they have to be re-meshed when
+     * the hull changes. {@code requestModelDataUpdate()} only covers this block; the 3x3x3 block dirty mark
+     * covers the sections they live in (which can be a different chunk section entirely).
+     */
+    private void refreshClientNeighbourhood() {
+        if (level != null && level.isClientSide) com.caca.copypoly.client.PolyClient.refreshAround(level, worldPosition);
     }
     public VoxelShape shape() {
         if (shape == null) {
@@ -94,6 +103,7 @@ public class PolyBlockEntity extends CopycatBlockEntity {
             if (packet && level != null) {
                 requestModelDataUpdate();
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+                refreshClientNeighbourhood();
             }
         }
     }
