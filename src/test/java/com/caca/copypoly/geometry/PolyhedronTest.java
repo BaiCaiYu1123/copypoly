@@ -99,6 +99,29 @@ class PolyhedronTest {
         var p=new Polyhedron.Point(1.1,2.2,3.3).withAxis(1,4.4);
         assertEquals(new Polyhedron.Point(1.1,4.4,3.3),p);
     }
+    @Test void presentsAcceptsSlantedSurfacesThatStillReachTheBorder() {
+        for(int axis=0;axis<3;axis++) {
+            assertTrue(Polyhedron.CUBE.presents(axis,true));
+            assertTrue(Polyhedron.CUBE.presents(axis,false));
+        }
+        // Triangular prism (triangle 0,0 / 16,0 / 0,16 extruded along Z): the top surface is the slanted
+        // plane x+y=16, so it is NOT a boundary face, yet the material is clearly visible from above.
+        var prism=hull("0,0,0;16,0,0;0,16,0;0,0,16;16,0,16;0,16,16");
+        assertTrue(prism.presents(1,true));
+        assertFalse(prism.faceAtBoundary(1,true));
+        assertTrue(prism.presents(1,false));   // flat bottom on y = 0
+        assertTrue(prism.presents(0,false));   // vertical leg on x = 0
+        // No face is parallel to +X, but the slanted face does reach x = 16 along the bottom edge, so the
+        // material is visible from +X. The strict probe gate is what keeps that from inventing a connection
+        // across X: faceAtBoundary(0,true) stays false, so showsOffset hides the +X neighbour.
+        assertTrue(prism.presents(0,true));
+        assertFalse(prism.faceAtBoundary(0,true));
+        assertFalse(prism.showsOffset(1,0,0));
+        // A hull that stops short of the border presents nothing on that side.
+        var inset=hull("0,0,0;0,0,16;0,16,0;0,16,16;12,0,0;12,0,16;12,16,0;12,16,16");
+        assertFalse(inset.presents(0,true));
+        assertTrue(inset.presents(0,false));
+    }
     @Test void showsOffsetAllowsCornersOnlyWhereTheHullFillsTheBorder() {
         // A full cube lets connected textures see every neighbour and every corner probe.
         assertTrue(Polyhedron.CUBE.showsOffset(0,0,0));

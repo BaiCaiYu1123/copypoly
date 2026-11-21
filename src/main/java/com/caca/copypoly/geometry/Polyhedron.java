@@ -252,6 +252,30 @@ public final class Polyhedron {
         return false;
     }
     /**
+     * Whether the hull presents a surface toward this side of the block, and actually reaches that side.
+     * This is the appearance test for the copied material: a slanted face still counts as "the material is
+     * visible from above" as long as the hull touches y = 16 somewhere, which is what lets edited shapes
+     * (triangular prisms, ramps, clipped corners) join connected textures across a block border. Unlike
+     * {@link #faceAtBoundary} the face does not have to be parallel to the block side, and unlike a bare
+     * "some face looks that way" test a hull that stops short of the border does not claim anything.
+     */
+    public boolean presents(int axis,boolean positive) {
+        boolean facing=false;
+        double reach=positive ? -16 : 32;
+        for(Face face:faces) {
+            if(face.vertices().isEmpty()) continue;
+            Plane normal=face.plane();
+            int component=axis==0 ? normal.x() : axis==1 ? normal.y() : normal.z();
+            if(positive ? component>0 : component<0) facing=true;
+            for(Point vertex:face.vertices()) {
+                double coordinate=vertex.axis(axis);
+                reach=positive ? Math.max(reach,coordinate) : Math.min(reach,coordinate);
+            }
+        }
+        double target=positive ? 16 : 0;
+        return facing && Math.abs(reach-target)<=1e-6;
+    }
+    /**
      * Whether a connected-texture probe at this block offset should see the real world. Every axis the
      * offset moves along must be a side where the hull presents a boundary face, so a probe towards a side
      * the hull does not fill reads as air (no connection invented). Corners matter here: Create's
